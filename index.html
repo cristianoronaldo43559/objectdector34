@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Live Object Detector</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #161a22;
+    --accent: #4f8cff;
+    --accent-2: #34d399;
+    --text: #e8ebf1;
+    --muted: #8b93a7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 60px;
+  }
+  h1 {
+    font-size: 1.4rem;
+    margin: 0 0 4px;
+    letter-spacing: 0.3px;
+  }
+  p.subtitle {
+    color: var(--muted);
+    margin: 0 0 20px;
+    font-size: 0.9rem;
+    text-align: center;
+  }
+  #stage {
+    position: relative;
+    width: 100%;
+    max-width: 720px;
+    aspect-ratio: 4 / 3;
+    background: #000;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+  }
+  video, canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+  video { object-fit: cover; transform: scaleX(-1); }
+  canvas { transform: scaleX(-1); }
+  #status {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.55);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    color: var(--text);
+    backdrop-filter: blur(4px);
+  }
+  #controls {
+    margin-top: 18px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: opacity 0.15s ease, transform 0.1s ease;
+  }
+  button:hover { opacity: 0.9; }
+  button:active { transform: scale(0.97); }
+  button.secondary {
+    background: var(--panel);
+    border: 1px solid #2a3040;
+    color: var(--text);
+  }
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  #detections {
+    margin-top: 22px;
+    width: 100%;
+    max-width: 720px;
+    background: var(--panel);
+    border: 1px solid #232838;
+    border-radius: 12px;
+    padding: 14px 18px;
+  }
+  #detections h2 {
+    font-size: 0.95rem;
+    margin: 0 0 10px;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  #detection-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .tag {
+    background: #1d2432;
+    border: 1px solid #2a3550;
+    color: var(--accent-2);
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+  .tag span.count {
+    color: var(--muted);
+    margin-left: 4px;
+  }
+  #empty-msg {
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  footer {
+    margin-top: 30px;
+    color: var(--muted);
+    font-size: 0.75rem;
+    text-align: center;
+  }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>🎥 Live Object Detector</h1>
+<p class="subtitle">Runs entirely in your browser using TensorFlow.js — no server, no data leaves your device.</p>
+
+<div id="stage">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="overlay"></canvas>
+  <div id="status">Loading model…</div>
+</div>
+
+<div id="controls">
+  <button id="startBtn">Start Camera</button>
+  <button id="switchBtn" class="secondary" disabled>Switch Camera</button>
+  <button id="stopBtn" class="secondary" disabled>Stop</button>
+</div>
+
+<div id="detections">
+  <h2>Detected objects</h2>
+  <div id="detection-list"><span id="empty-msg">Nothing detected yet.</span></div>
+</div>
+
+<footer>
+  Model: COCO-SSD (TensorFlow.js) · Works best served over HTTPS (e.g. GitHub Pages) since camera access requires a secure context.
+</footer>
+
+<!-- TensorFlow.js + COCO-SSD model from CDN -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+
+<script>
+  const video = document.getElementById('video');
+  const overlay = document.getElementById('overlay');
+  const ctx = overlay.getContext('2d');
+  const statusEl = document.getElementById('status');
+  const startBtn = document.getElementById('startBtn');
+  const switchBtn = document.getElementById('switchBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const listEl = document.getElementById('detection-list');
+
+  let model = null;
+  let stream = null;
+  let rafId = null;
+  let facingMode = 'environment'; // back camera by default on phones
+
+  const colorFor = (label) => {
+    // deterministic color per label so boxes stay consistent
+    let hash = 0;
+    for (let i = 0; i < label.length; i++) hash = label.charCodeAt(i) + ((hash << 5) - hash);
+    const hue = Math.abs(hash) % 360;
+    return `hsl(${hue}, 85%, 55%)`;
+  };
+
+  async function loadModel() {
+    statusEl.textContent = 'Loading model…';
+    model = await cocoSsd.load();
+    statusEl.textContent = 'Model ready';
+  }
+
+  async function startCamera() {
+    startBtn.disabled = true;
+    statusEl.textContent = 'Requesting camera access…';
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode, width: { ideal: 1280 }, height: { ideal: 960 } },
+        audio: false
+      });
+      video.srcObject = stream;
+      await video.play();
+
+      overlay.width = video.videoWidth;
+      overlay.height = video.videoHeight;
+
+      if (!model) await loadModel();
+
+      switchBtn.disabled = false;
+      stopBtn.disabled = false;
+      statusEl.textContent = 'Detecting…';
+      detectLoop();
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = 'Camera access failed: ' + err.message;
+      startBtn.disabled = false;
+    }
+  }
+
+  function stopCamera() {
+    if (rafId) cancelAnimationFrame(rafId);
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+    statusEl.textContent = 'Stopped';
+    startBtn.disabled = false;
+    switchBtn.disabled = true;
+    stopBtn.disabled = true;
+    listEl.innerHTML = '<span id="empty-msg">Nothing detected yet.</span>';
+  }
+
+  async function switchCamera() {
+    facingMode = facingMode === 'environment' ? 'user' : 'environment';
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    await startCamera();
+  }
+
+  function updateDetectionList(predictions) {
+    if (!predictions.length) {
+      listEl.innerHTML = '<span id="empty-msg">Nothing detected yet.</span>';
+      return;
+    }
+    const counts = {};
+    predictions.forEach(p => {
+      const name = p.class;
+      counts[name] = (counts[name] || 0) + 1;
+    });
+    listEl.innerHTML = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) =>
+        `<span class="tag">${name}${count > 1 ? `<span class="count">×${count}</span>` : ''}</span>`
+      ).join('');
+  }
+
+  async function detectLoop() {
+    if (!model || video.paused || video.ended) return;
+
+    const predictions = await model.detect(video);
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+    predictions.forEach(pred => {
+      const [x, y, w, h] = pred.bbox;
+      const color = colorFor(pred.class);
+      const label = `${pred.class} ${Math.round(pred.score * 100)}%`;
+
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = color;
+      ctx.strokeRect(x, y, w, h);
+
+      ctx.font = '16px -apple-system, sans-serif';
+      const textWidth = ctx.measureText(label).width;
+      ctx.fillStyle = color;
+      ctx.fillRect(x - 1.5, y - 24, textWidth + 12, 24);
+
+      ctx.fillStyle = '#0f1115';
+      ctx.fillText(label, x + 5, y - 6);
+    });
+
+    updateDetectionList(predictions);
+    rafId = requestAnimationFrame(detectLoop);
+  }
+
+  startBtn.addEventListener('click', startCamera);
+  stopBtn.addEventListener('click', stopCamera);
+  switchBtn.addEventListener('click', switchCamera);
+
+  // Preload the model in the background so the first "Start" click is faster
+  loadModel().catch(err => {
+    statusEl.textContent = 'Model failed to load: ' + err.message;
+  });
+</script>
+
+</body>
+</html>
