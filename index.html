@@ -2,382 +2,280 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Cool Detector — Face Recognition + Objects</title>
+  <title>Camera Debug & Start — Face/Object Demo</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    :root{
-      --bg:#0b0f14; --panel:#0f1720; --accent:#00e6d8; --muted:#98a0aa;
-      --glow: 0 6px 30px rgba(0,230,216,0.12);
-    }
-    *{box-sizing:border-box}
-    body{margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#061018 0%, #0d1a23 100%);color:#dfe7ee;display:flex;flex-direction:column;align-items:center;padding:18px;}
-    header{width:100%;max-width:1100px;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-    h1{font-size:18px;margin:0;color:var(--accent)}
-    .controls{display:flex;gap:8px;align-items:center}
-    .btn{background:linear-gradient(90deg, rgba(0,230,216,0.12), rgba(0,150,200,0.08));border:1px solid rgba(0,230,216,0.14);color:var(--accent);padding:8px 12px;border-radius:8px;cursor:pointer;backdrop-filter:blur(6px)}
-    .btn.secondary{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
-    #status{font-size:13px;color:var(--muted);margin-top:6px}
-    #stage{position:relative;background:#000;border-radius:12px;overflow:hidden;box-shadow:var(--glow);width:100%;max-width:1100px}
-    video{display:none}
-    canvas{display:block;width:100%;height:auto}
-    .ui-top-left{position:absolute;left:12px;top:12px;background:rgba(6,12,18,0.5);padding:8px;border-radius:8px;color:var(--muted);font-size:13px}
-    .ui-top-right{position:absolute;right:12px;top:12px;background:linear-gradient(180deg, rgba(10,12,18,0.6), rgba(6,8,12,0.6));padding:8px;border-radius:8px;color:var(--muted);font-size:13px;display:flex;gap:8px;align-items:center}
-    .label-pill{background:rgba(0,0,0,0.5);padding:6px 8px;border-radius:999px;border:1px solid rgba(255,255,255,0.04);color:#cdeff0}
-    #registerPanel{display:flex;gap:8px;align-items:center}
-    input[type="text"]{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
-    #modelsHint{font-size:12px;color:#8aa2ad;margin-top:10px}
-    footer{margin-top:12px;color:var(--muted);font-size:13px;max-width:1100px;width:100%}
-    .neon-text{color:var(--accent);text-shadow:0 0 6px rgba(0,230,216,0.18)}
+    body{font-family:system-ui,Arial;background:#07121a;color:#dfeff0;padding:18px;display:flex;flex-direction:column;align-items:center}
+    h1{color:#00e6d8;margin:0 0 8px}
+    #panel{width:100%;max-width:980px;background:rgba(255,255,255,0.02);padding:12px;border-radius:10px;box-shadow:0 6px 30px rgba(0,0,0,0.6)}
+    .row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+    select,input,button{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    button{cursor:pointer;background:linear-gradient(90deg, rgba(0,230,216,0.08), rgba(0,150,200,0.03));border:1px solid rgba(0,230,216,0.12)}
+    #status{font-size:13px;color:#a9c4c0;margin-top:6px}
+    #warning{color:#ffd4b2;font-size:13px}
+    video{background:#000;border-radius:8px;display:block;width:100%;height:auto;max-height:60vh}
+    pre{background:#041018;color:#8cc;padding:8px;border-radius:6px;overflow:auto;max-height:140px}
   </style>
 </head>
 <body>
-  <header>
-    <h1 class="neon-text">Cool Detector — Face & Object Recognition</h1>
-    <div class="controls">
-      <button id="startBtn" class="btn">Start Camera</button>
-      <button id="stopBtn" class="btn secondary">Stop</button>
-      <button id="clearDB" class="btn secondary">Clear Faces</button>
+  <h1>Camera Debug & Start</h1>
+  <div id="panel">
+    <div class="row">
+      <label for="deviceSelect">Camera:</label>
+      <select id="deviceSelect"><option>Loading cameras…</option></select>
+      <button id="startBtn">Start Camera</button>
+      <button id="stopBtn">Stop</button>
+      <button id="retryPerm">Retry Permissions</button>
     </div>
-  </header>
 
-  <div id="stage">
+    <div class="row">
+      <label for="resolution">Resolution:</label>
+      <select id="resolution">
+        <option value="default">default</option>
+        <option value="1280x720">1280×720</option>
+        <option value="640x480">640×480</option>
+        <option value="320x240">320×240 (low)</option>
+      </select>
+
+      <label style="margin-left:12px">Mode:</label>
+      <select id="facing">
+        <option value="environment">rear (environment)</option>
+        <option value="user">front (user)</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <button id="testGetUserMedia">Test getUserMedia</button>
+      <button id="openSettings">Open Browser Camera Settings →</button>
+    </div>
+
+    <div id="status">Status: idle</div>
+    <div id="warning" style="display:none"></div>
+
+    <h3 style="margin-top:12px">Video Preview</h3>
     <video id="video" autoplay playsinline></video>
-    <canvas id="overlay"></canvas>
 
-    <div class="ui-top-left" id="status">Idle — models not loaded</div>
+    <h3 style="margin-top:12px">Console log (copy for support)</h3>
+    <pre id="log">—</pre>
 
-    <div class="ui-top-right">
-      <div class="label-pill" id="fps">FPS: —</div>
-      <div class="label-pill" id="objs">Objects: —</div>
-    </div>
+    <h3 style="margin-top:12px">Quick troubleshooting</h3>
+    <ul>
+      <li>Serve this page over HTTPS or open via http://localhost (getUserMedia requires a secure context).</li>
+      <li>If the permission prompt never appears, the site may be blocked—check browser site settings (click the camera icon in the address bar).</li>
+      <li>On macOS / Windows, ensure “camera access” is allowed for your browser in system privacy settings.</li>
+      <li>Close other apps (Zoom/Teams) that might be occupying the camera.</li>
+    </ul>
   </div>
-
-  <div style="max-width:1100px;width:100%;display:flex;gap:10px;margin-top:12px;align-items:center">
-    <div id="registerPanel">
-      <input id="nameInput" type="text" placeholder="Your name (for registration)" />
-      <button id="registerBtn" class="btn">Register Face</button>
-      <input id="photoUpload" type="file" accept="image/*" style="display:none"/>
-      <button id="uploadBtn" class="btn secondary">Upload Photo</button>
-    </div>
-
-    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-      <label style="font-size:13px;color:var(--muted)">Min conf</label>
-      <input id="minConf" type="range" min="0.3" max="0.9" step="0.05" value="0.5" />
-      <div class="label-pill" id="confValue">0.50</div>
-    </div>
-  </div>
-
-  <div id="modelsHint">
-    Models must be placed in ./models (see README lines below). Works on HTTPS or localhost. Face data stored locally in your browser.
-  </div>
-
-  <footer>How to use: 1) Serve this file from localhost/HTTPS. 2) Download face-api model files into ./models. 3) Start camera, enter name, click Register Face (take a few poses). Then the page will recognize you and label your face.</footer>
-
-  <!-- Libs -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
 
   <script>
-  // Config
-  const MODEL_URL = './models'; // see instructions below
-  const NUM_REGISTRATION_SAMPLES = 5;
+    const deviceSelect = document.getElementById('deviceSelect');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const retryPerm = document.getElementById('retryPerm');
+    const resolution = document.getElementById('resolution');
+    const facing = document.getElementById('facing');
+    const testGetUserMedia = document.getElementById('testGetUserMedia');
+    const openSettings = document.getElementById('openSettings');
+    const statusEl = document.getElementById('status');
+    const warningEl = document.getElementById('warning');
+    const logEl = document.getElementById('log');
+    const video = document.getElementById('video');
 
-  // Elements
-  const video = document.getElementById('video');
-  const overlay = document.getElementById('overlay');
-  const ctx = overlay.getContext('2d');
-  const statusEl = document.getElementById('status');
-  const fpsEl = document.getElementById('fps');
-  const objsEl = document.getElementById('objs');
-  const startBtn = document.getElementById('startBtn');
-  const stopBtn = document.getElementById('stopBtn');
-  const registerBtn = document.getElementById('registerBtn');
-  const nameInput = document.getElementById('nameInput');
-  const uploadBtn = document.getElementById('uploadBtn');
-  const photoUpload = document.getElementById('photoUpload');
-  const clearDB = document.getElementById('clearDB');
-  const minConf = document.getElementById('minConf');
-  const confValue = document.getElementById('confValue');
+    let currentStream = null;
 
-  let streaming = false;
-  let faceMatcher = null;
-  let labeledDescriptors = []; // in-memory
-  let cocoModel = null;
-  let lastLoopTime = performance.now();
-  let fpsSmooth = 0;
-
-  // Helpers for storage
-  function saveDescriptorsToLocalStorage() {
-    const serial = labeledDescriptors.map(ld => ({
-      label: ld.label,
-      descriptors: ld.descriptors.map(d => Array.from(d))
-    }));
-    localStorage.setItem('faceDB', JSON.stringify(serial));
-  }
-  function loadDescriptorsFromLocalStorage() {
-    const raw = localStorage.getItem('faceDB');
-    if (!raw) return [];
-    try {
-      const parsed = JSON.parse(raw);
-      return parsed.map(p => new faceapi.LabeledFaceDescriptors(p.label, p.descriptors.map(arr=>new Float32Array(arr))));
-    } catch(e) { console.warn('Failed to load faceDB', e); return []; }
-  }
-
-  // Camera
-  async function startCamera() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: {ideal: 1280}, height: {ideal: 720} },
-        audio: false
-      });
-      video.srcObject = stream;
-      await video.play();
-      streaming = true;
-      resizeCanvas();
-      window.addEventListener('resize', resizeCanvas);
-      statusEl.textContent = 'Camera started';
-    } catch (err) {
-      statusEl.textContent = 'Camera error: ' + err.message;
-      console.error(err);
+    function log(msg) {
+      console.log(msg);
+      if (logEl.textContent === '—') logEl.textContent = '';
+      logEl.textContent += msg + '\\n';
+      logEl.scrollTop = logEl.scrollHeight;
     }
-  }
-  function stopCamera() {
-    if (video.srcObject) {
-      video.srcObject.getTracks().forEach(t => t.stop());
-      video.srcObject = null;
+
+    function setStatus(txt) {
+      statusEl.textContent = 'Status: ' + txt;
+      log('STATUS: ' + txt);
     }
-    streaming = false;
-    statusEl.textContent = 'Camera stopped';
-    clearCanvas();
-  }
-  function resizeCanvas() {
-    const dpr = window.devicePixelRatio || 1;
-    overlay.width = Math.round(video.videoWidth * dpr);
-    overlay.height = Math.round(video.videoHeight * dpr);
-    overlay.style.width = video.videoWidth + 'px';
-    overlay.style.height = video.videoHeight + 'px';
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-  }
-  function clearCanvas() {
-    ctx.clearRect(0,0,overlay.width,overlay.height);
-  }
-
-  // Load models
-  async function loadModels() {
-    statusEl.textContent = 'Loading face models...';
-    await Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-      faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL).catch(()=>{}), // optional
-    ]);
-    statusEl.textContent = 'Loading object model...';
-    cocoModel = await cocoSsd.load();
-    statusEl.textContent = 'Models loaded';
-    labeledDescriptors = loadDescriptorsFromLocalStorage();
-    rebuildMatcher();
-  }
-
-  function rebuildMatcher() {
-    if (labeledDescriptors.length) {
-      faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
-      statusEl.textContent = 'Ready — ' + labeledDescriptors.length + ' registered face(s)';
-    } else {
-      faceMatcher = null;
-      statusEl.textContent = 'Ready — no registered faces';
+    function setWarning(txt) {
+      if (!txt) { warningEl.style.display = 'none'; warningEl.textContent = ''; }
+      else { warningEl.style.display = 'block'; warningEl.textContent = txt; }
+      log('WARNING: ' + (txt || '<none>'));
     }
-  }
 
-  // Registration flow: capture a few samples and store descriptors
-  async function registerFace(name, fromUploadImage=null) {
-    if (!name) { alert('Enter a name first'); return; }
-    statusEl.textContent = `Registering "${name}" — please look at the camera`;
-    const descriptors = [];
-    try {
-      for (let i=0;i<NUM_REGISTRATION_SAMPLES;i++){
-        await new Promise(r => setTimeout(r, 600)); // small pause between samples
-        let detection;
-        if (fromUploadImage) {
-          // detect on provided image element
-          detection = await faceapi.detectSingleFace(fromUploadImage, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
-        } else {
-          detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
-        }
-        if (detection && detection.descriptor) {
-          descriptors.push(detection.descriptor);
-          statusEl.textContent = `Captured ${descriptors.length}/${NUM_REGISTRATION_SAMPLES}`;
-        } else {
-          statusEl.textContent = `Face not found — try a clearer look (${i+1}/${NUM_REGISTRATION_SAMPLES})`;
-        }
-      }
-      if (descriptors.length) {
-        labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(name, descriptors));
-        saveDescriptorsToLocalStorage();
-        rebuildMatcher();
-        statusEl.textContent = `Registered "${name}" (${descriptors.length} samples)`;
+    // Check secure context
+    function checkSecureContext() {
+      const ok = (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+      if (!ok) {
+        setWarning('Page not served over HTTPS or localhost — camera access may be blocked. Serve via http://localhost or HTTPS.');
       } else {
-        statusEl.textContent = 'No descriptors captured — registration failed';
+        setWarning('');
       }
-    } catch(err) {
-      console.error(err);
-      statusEl.textContent = 'Registration error';
+      return ok;
     }
-  }
+    checkSecureContext();
 
-  // Recognition + draw loop
-  async function loop() {
-    if (!streaming) return;
-    const now = performance.now();
-    const dt = now - lastLoopTime;
-    lastLoopTime = now;
-    const instFps = 1000 / dt;
-    fpsSmooth = fpsSmooth * 0.85 + instFps * 0.15;
-    fpsEl.textContent = 'FPS: ' + fpsSmooth.toFixed(1);
+    // Enumerate devices
+    async function enumerateCameras() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cams = devices.filter(d => d.kind === 'videoinput');
+        deviceSelect.innerHTML = '';
+        if (cams.length === 0) {
+          deviceSelect.innerHTML = '<option>No cameras found</option>';
+          setStatus('No camera devices detected by browser');
+        } else {
+          cams.forEach((cam, i) => {
+            const label = cam.label || ('Camera ' + (i+1));
+            const opt = document.createElement('option');
+            opt.value = cam.deviceId;
+            opt.textContent = label;
+            deviceSelect.appendChild(opt);
+          });
+          setStatus('Found ' + cams.length + ' camera(s)');
+        }
+        log('enumerateDevices result: ' + JSON.stringify(cams.map(c=>({label:c.label,id:c.deviceId}))));
+      } catch (err) {
+        console.error(err);
+        log('enumerateDevices error: ' + err);
+        setStatus('enumerateDevices failed: ' + (err.message || err));
+      }
+    }
 
-    clearCanvas();
-    // draw video frame as background
-    ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+    // Start camera with chosen device and resolution
+    async function startCamera() {
+      if (currentStream) stopCamera();
+      checkSecureContext();
+      const deviceId = deviceSelect.value;
+      const res = resolution.value;
+      const facingMode = facing.value;
+      const constraints = { audio: false, video: {} };
 
-    // Face detection + recognition
-    const minConfidence = parseFloat(minConf.value);
-    confValue.textContent = Number(minConf.value).toFixed(2);
-    const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: minConfidence });
-    const results = await faceapi.detectAllFaces(video, options).withFaceLandmarks().withFaceDescriptors();
-
-    // draw faces
-    results.forEach(res => {
-      const box = res.detection.box;
-      const score = res.detection.score;
-      // neon box
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = 'rgba(0,230,216,0.95)';
-      roundRect(ctx, box.x-5, box.y-5, box.width+10, box.height+10, 8);
-      ctx.stroke();
-
-      // landmarks
-      ctx.fillStyle = 'rgba(0,230,216,0.9)';
-      res.landmarks.positions.slice(36, 68).forEach(pt => {
-        ctx.fillRect(pt.x-1.5, pt.y-1.5, 3, 3);
-      });
-
-      // recognition
-      let label = 'Unknown';
-      let dist = null;
-      if (faceMatcher) {
-        const best = faceMatcher.findBestMatch(res.descriptor);
-        label = best.toString(); // "name (distance)"
-        // we can parse the distance if needed
-        const m = label.match(/(.+?)\s*\(([\d.]+)\)$/);
-        if (m) { label = m[1]; dist = parseFloat(m[2]); }
+      if (deviceId && deviceId !== 'undefined' && deviceId !== 'No cameras found') {
+        constraints.video.deviceId = { exact: deviceId };
+      } else if (facingMode) {
+        constraints.video.facingMode = { exact: facingMode };
+      } else {
+        constraints.video = true;
       }
 
-      // label background
-      const labelText = label + (dist != null ? ' • ' + dist.toFixed(2) : '');
-      ctx.font = '18px Inter, sans-serif';
-      const textWidth = ctx.measureText(labelText).width;
-      const px = box.x;
-      const py = Math.max(4, box.y - 26);
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillRect(px-4, py-22, textWidth + 14, 26);
-      ctx.fillStyle = '#00e6d8';
-      ctx.fillText(labelText, px + 3, py - 4 + 20);
+      if (res && res !== 'default') {
+        const [w,h] = res.split('x').map(Number);
+        constraints.video.width = { ideal: w };
+        constraints.video.height = { ideal: h };
+      } else {
+        constraints.video.width = { ideal: 1280 };
+        constraints.video.height = { ideal: 720 };
+      }
+
+      setStatus('Requesting camera permissions…');
+      log('getUserMedia constraints: ' + JSON.stringify(constraints));
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        currentStream = stream;
+        video.srcObject = stream;
+        await video.play();
+        setStatus('Camera started — playing video');
+        setWarning('');
+        // refresh device list (labels become available after permission)
+        await enumerateCameras();
+      } catch (err) {
+        console.error('getUserMedia error', err);
+        handleGetUserMediaError(err);
+      }
+    }
+
+    function stopCamera() {
+      if (currentStream) {
+        currentStream.getTracks().forEach(t => t.stop());
+        currentStream = null;
+        video.srcObject = null;
+        setStatus('Camera stopped');
+      } else {
+        setStatus('No active camera to stop');
+      }
+    }
+
+    function handleGetUserMediaError(err) {
+      const name = err.name || (err.toString && err.toString());
+      log('getUserMedia failed: ' + name + ' - ' + (err.message || err));
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        setWarning('Permission denied. Check the camera permission for this site (address bar) or browser privacy settings. If you previously blocked access, remove the block and retry.');
+        setStatus('Permission denied');
+      } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+        setWarning('No camera matches the selected constraints. Try selecting a different camera or choose a lower resolution.');
+        setStatus('No device or unsupported constraints');
+      } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+        setWarning('Camera is already in use by another application. Close other apps (Zoom/Teams) and retry.');
+        setStatus('Camera busy / in use');
+      } else {
+        setWarning('Camera error: ' + (err.message || name));
+        setStatus('Camera error: ' + (err.message || name));
+      }
+    }
+
+    async function retryPermissions() {
+      // Some browsers won't show prompt again if previously blocked; guide user
+      setStatus('Retrying permission request — this will prompt the browser if possible.');
+      try {
+        // Attempt a minimal getUserMedia to trigger prompt
+        await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        setStatus('Permission granted (retry succeeded)');
+        setWarning('');
+        await enumerateCameras();
+      } catch (err) {
+        handleGetUserMediaError(err);
+        // If still blocked, provide guidance
+        setWarning('If prompt is not shown, open site permissions in browser (click lock/camera icon near address bar) and allow camera access, then reload the page.');
+      }
+    }
+
+    // Quick test for getUserMedia availability
+    testGetUserMedia.addEventListener('click', async () => {
+      setStatus('Testing permissions and getUserMedia availability…');
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream.getTracks().forEach(t => t.stop());
+        setStatus('getUserMedia is available and allowed');
+        setWarning('');
+        await enumerateCameras();
+      } catch (err) {
+        handleGetUserMediaError(err);
+      }
     });
 
-    // Object detection (every N frames or async)
-    try {
-      const objs = await cocoModel.detect(video);
-      const visibleObjs = objs.filter(o => o.score >= minConfidence);
-      objsEl.textContent = 'Objects: ' + visibleObjs.length;
-      visibleObjs.forEach(o => {
-        const [x,y,w,h] = o.bbox;
-        // draw object box
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = 'rgba(255,180,50,0.9)';
-        ctx.strokeRect(x, y, w, h);
-        // draw label bg
-        const label = `${o.class} ${(o.score*100).toFixed(0)}%`;
-        ctx.fillStyle = 'rgba(255,180,50,0.95)';
-        ctx.fillRect(x, y - 20, ctx.measureText(label).width + 10, 20);
-        ctx.fillStyle = '#182022';
-        ctx.fillText(label, x + 5, y - 4);
-      });
-    } catch (e) {
-      // ignore occasional coco errors
-    }
+    startBtn.addEventListener('click', startCamera);
+    stopBtn.addEventListener('click', stopCamera);
+    retryPerm.addEventListener('click', retryPermissions);
 
-    requestAnimationFrame(loop);
-  }
+    // Try to open browser settings (best-effort)
+    openSettings.addEventListener('click', () => {
+      alert('Open your browser site settings (click site lock icon in address bar) and confirm camera is allowed. Then reload this page.');
+    });
 
-  // Rounded rect helper
-  function roundRect(ctx,x,y,w,h,r){
-    ctx.beginPath();
-    ctx.moveTo(x+r,y);
-    ctx.arcTo(x+w,y,x+w,y+h,r);
-    ctx.arcTo(x+w,y+h,x,y+h,r);
-    ctx.arcTo(x,y+h,x,y,r);
-    ctx.arcTo(x,y,x+w,y,r);
-    ctx.closePath();
-  }
+    // refresh devices on load and when devicechange event fires
+    navigator.mediaDevices && navigator.mediaDevices.addEventListener && navigator.mediaDevices.addEventListener('devicechange', () => {
+      log('devicechange event received — re-enumerating cameras');
+      enumerateCameras();
+    });
 
-  // Event wiring
-  startBtn.addEventListener('click', async () => {
-    if (!streaming) {
-      await startCamera();
-      if (!faceapi.nets.tinyFaceDetector.params) {
-        await loadModels();
+    // initial enumeration (may return limited info before permission)
+    enumerateCameras().catch(e => log('initial enumerate failed: ' + e));
+
+    // Show permission state if supported
+    async function showPermissionStatus() {
+      if (!navigator.permissions) return;
+      try {
+        // Note: not all browsers support 'camera' - some use 'microphone'/'camera' differently
+        const p = await navigator.permissions.query({ name: 'camera' }).catch(()=>null);
+        if (p) {
+          log('Permission state (camera): ' + p.state);
+          p.onchange = () => log('Permission changed: ' + p.state);
+        } else {
+          log('navigator.permissions.query({name:"camera"}) not supported or returned null');
+        }
+      } catch (e) {
+        log('permissions API check error: ' + e);
       }
-      loop();
     }
-  });
-  stopBtn.addEventListener('click', () => stopCamera());
-
-  registerBtn.addEventListener('click', async () => {
-    const name = nameInput.value.trim();
-    if (!name) { alert('Please enter a name'); return; }
-    // capture from live camera if running, otherwise ask to upload
-    if (streaming) {
-      await registerFace(name, null);
-    } else {
-      alert('Start the camera first or use Upload Photo to register from an image.');
-    }
-  });
-
-  uploadBtn.addEventListener('click', () => photoUpload.click());
-  photoUpload.addEventListener('change', async (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.src = url;
-    img.onload = async () => {
-      // show temp canvas detection and register
-      const name = nameInput.value.trim() || prompt('Name for this photo?');
-      if (!name) return;
-      await registerFace(name, img);
-      URL.revokeObjectURL(url);
-    };
-  });
-
-  clearDB.addEventListener('click', () => {
-    if (!confirm('Clear all registered faces from localStorage?')) return;
-    localStorage.removeItem('faceDB');
-    labeledDescriptors = [];
-    rebuildMatcher();
-    statusEl.textContent = 'Face DB cleared';
-  });
-
-  // init minConf UI
-  minConf.addEventListener('input', () => confValue.textContent = Number(minConf.value).toFixed(2));
-
-  // Load serialized DB on start
-  (function init() {
-    labeledDescriptors = loadDescriptorsFromLocalStorage();
-    rebuildMatcher();
-    statusEl.textContent = 'Idle — load models to begin';
-  })();
-
-  // Note: If you put the models in a different location, change MODEL_URL above.
+    showPermissionStatus();
   </script>
 </body>
 </html>
