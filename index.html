@@ -1,304 +1,383 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Live Object Detector</title>
-<style>
-  :root {
-    --bg: #0f1115;
-    --panel: #161a22;
-    --accent: #4f8cff;
-    --accent-2: #34d399;
-    --text: #e8ebf1;
-    --muted: #8b93a7;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    min-height: 100vh;
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 24px 16px 60px;
-  }
-  h1 {
-    font-size: 1.4rem;
-    margin: 0 0 4px;
-    letter-spacing: 0.3px;
-  }
-  p.subtitle {
-    color: var(--muted);
-    margin: 0 0 20px;
-    font-size: 0.9rem;
-    text-align: center;
-  }
-  #stage {
-    position: relative;
-    width: 100%;
-    max-width: 720px;
-    aspect-ratio: 4 / 3;
-    background: #000;
-    border-radius: 14px;
-    overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.45);
-  }
-  video, canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-  }
-  video { object-fit: cover; transform: scaleX(-1); }
-  canvas { transform: scaleX(-1); }
-  #status {
-    position: absolute;
-    bottom: 10px;
-    left: 10px;
-    background: rgba(0,0,0,0.55);
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    color: var(--text);
-    backdrop-filter: blur(4px);
-  }
-  #controls {
-    margin-top: 18px;
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-  button {
-    background: var(--accent);
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-size: 0.95rem;
-    cursor: pointer;
-    transition: opacity 0.15s ease, transform 0.1s ease;
-  }
-  button:hover { opacity: 0.9; }
-  button:active { transform: scale(0.97); }
-  button.secondary {
-    background: var(--panel);
-    border: 1px solid #2a3040;
-    color: var(--text);
-  }
-  button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  #detections {
-    margin-top: 22px;
-    width: 100%;
-    max-width: 720px;
-    background: var(--panel);
-    border: 1px solid #232838;
-    border-radius: 12px;
-    padding: 14px 18px;
-  }
-  #detections h2 {
-    font-size: 0.95rem;
-    margin: 0 0 10px;
-    color: var(--muted);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  #detection-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .tag {
-    background: #1d2432;
-    border: 1px solid #2a3550;
-    color: var(--accent-2);
-    padding: 5px 12px;
-    border-radius: 999px;
-    font-size: 0.85rem;
-    white-space: nowrap;
-  }
-  .tag span.count {
-    color: var(--muted);
-    margin-left: 4px;
-  }
-  #empty-msg {
-    color: var(--muted);
-    font-size: 0.9rem;
-  }
-  footer {
-    margin-top: 30px;
-    color: var(--muted);
-    font-size: 0.75rem;
-    text-align: center;
-  }
-  a { color: var(--accent); }
-</style>
+  <meta charset="utf-8" />
+  <title>Cool Detector — Face Recognition + Objects</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root{
+      --bg:#0b0f14; --panel:#0f1720; --accent:#00e6d8; --muted:#98a0aa;
+      --glow: 0 6px 30px rgba(0,230,216,0.12);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#061018 0%, #0d1a23 100%);color:#dfe7ee;display:flex;flex-direction:column;align-items:center;padding:18px;}
+    header{width:100%;max-width:1100px;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    h1{font-size:18px;margin:0;color:var(--accent)}
+    .controls{display:flex;gap:8px;align-items:center}
+    .btn{background:linear-gradient(90deg, rgba(0,230,216,0.12), rgba(0,150,200,0.08));border:1px solid rgba(0,230,216,0.14);color:var(--accent);padding:8px 12px;border-radius:8px;cursor:pointer;backdrop-filter:blur(6px)}
+    .btn.secondary{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
+    #status{font-size:13px;color:var(--muted);margin-top:6px}
+    #stage{position:relative;background:#000;border-radius:12px;overflow:hidden;box-shadow:var(--glow);width:100%;max-width:1100px}
+    video{display:none}
+    canvas{display:block;width:100%;height:auto}
+    .ui-top-left{position:absolute;left:12px;top:12px;background:rgba(6,12,18,0.5);padding:8px;border-radius:8px;color:var(--muted);font-size:13px}
+    .ui-top-right{position:absolute;right:12px;top:12px;background:linear-gradient(180deg, rgba(10,12,18,0.6), rgba(6,8,12,0.6));padding:8px;border-radius:8px;color:var(--muted);font-size:13px;display:flex;gap:8px;align-items:center}
+    .label-pill{background:rgba(0,0,0,0.5);padding:6px 8px;border-radius:999px;border:1px solid rgba(255,255,255,0.04);color:#cdeff0}
+    #registerPanel{display:flex;gap:8px;align-items:center}
+    input[type="text"]{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    #modelsHint{font-size:12px;color:#8aa2ad;margin-top:10px}
+    footer{margin-top:12px;color:var(--muted);font-size:13px;max-width:1100px;width:100%}
+    .neon-text{color:var(--accent);text-shadow:0 0 6px rgba(0,230,216,0.18)}
+  </style>
 </head>
 <body>
+  <header>
+    <h1 class="neon-text">Cool Detector — Face & Object Recognition</h1>
+    <div class="controls">
+      <button id="startBtn" class="btn">Start Camera</button>
+      <button id="stopBtn" class="btn secondary">Stop</button>
+      <button id="clearDB" class="btn secondary">Clear Faces</button>
+    </div>
+  </header>
 
-<h1>🎥 Live Object Detector</h1>
-<p class="subtitle">Runs entirely in your browser using TensorFlow.js — no server, no data leaves your device.</p>
+  <div id="stage">
+    <video id="video" autoplay playsinline></video>
+    <canvas id="overlay"></canvas>
 
-<div id="stage">
-  <video id="video" autoplay playsinline muted></video>
-  <canvas id="overlay"></canvas>
-  <div id="status">Loading model…</div>
-</div>
+    <div class="ui-top-left" id="status">Idle — models not loaded</div>
 
-<div id="controls">
-  <button id="startBtn">Start Camera</button>
-  <button id="switchBtn" class="secondary" disabled>Switch Camera</button>
-  <button id="stopBtn" class="secondary" disabled>Stop</button>
-</div>
+    <div class="ui-top-right">
+      <div class="label-pill" id="fps">FPS: —</div>
+      <div class="label-pill" id="objs">Objects: —</div>
+    </div>
+  </div>
 
-<div id="detections">
-  <h2>Detected objects</h2>
-  <div id="detection-list"><span id="empty-msg">Nothing detected yet.</span></div>
-</div>
+  <div style="max-width:1100px;width:100%;display:flex;gap:10px;margin-top:12px;align-items:center">
+    <div id="registerPanel">
+      <input id="nameInput" type="text" placeholder="Your name (for registration)" />
+      <button id="registerBtn" class="btn">Register Face</button>
+      <input id="photoUpload" type="file" accept="image/*" style="display:none"/>
+      <button id="uploadBtn" class="btn secondary">Upload Photo</button>
+    </div>
 
-<footer>
-  Model: COCO-SSD (TensorFlow.js) · Works best served over HTTPS (e.g. GitHub Pages) since camera access requires a secure context.
-</footer>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <label style="font-size:13px;color:var(--muted)">Min conf</label>
+      <input id="minConf" type="range" min="0.3" max="0.9" step="0.05" value="0.5" />
+      <div class="label-pill" id="confValue">0.50</div>
+    </div>
+  </div>
 
-<!-- TensorFlow.js + COCO-SSD model from CDN -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+  <div id="modelsHint">
+    Models must be placed in ./models (see README lines below). Works on HTTPS or localhost. Face data stored locally in your browser.
+  </div>
 
-<script>
+  <footer>How to use: 1) Serve this file from localhost/HTTPS. 2) Download face-api model files into ./models. 3) Start camera, enter name, click Register Face (take a few poses). Then the page will recognize you and label your face.</footer>
+
+  <!-- Libs -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
+
+  <script>
+  // Config
+  const MODEL_URL = './models'; // see instructions below
+  const NUM_REGISTRATION_SAMPLES = 5;
+
+  // Elements
   const video = document.getElementById('video');
   const overlay = document.getElementById('overlay');
   const ctx = overlay.getContext('2d');
   const statusEl = document.getElementById('status');
+  const fpsEl = document.getElementById('fps');
+  const objsEl = document.getElementById('objs');
   const startBtn = document.getElementById('startBtn');
-  const switchBtn = document.getElementById('switchBtn');
   const stopBtn = document.getElementById('stopBtn');
-  const listEl = document.getElementById('detection-list');
+  const registerBtn = document.getElementById('registerBtn');
+  const nameInput = document.getElementById('nameInput');
+  const uploadBtn = document.getElementById('uploadBtn');
+  const photoUpload = document.getElementById('photoUpload');
+  const clearDB = document.getElementById('clearDB');
+  const minConf = document.getElementById('minConf');
+  const confValue = document.getElementById('confValue');
 
-  let model = null;
-  let stream = null;
-  let rafId = null;
-  let facingMode = 'environment'; // back camera by default on phones
+  let streaming = false;
+  let faceMatcher = null;
+  let labeledDescriptors = []; // in-memory
+  let cocoModel = null;
+  let lastLoopTime = performance.now();
+  let fpsSmooth = 0;
 
-  const colorFor = (label) => {
-    // deterministic color per label so boxes stay consistent
-    let hash = 0;
-    for (let i = 0; i < label.length; i++) hash = label.charCodeAt(i) + ((hash << 5) - hash);
-    const hue = Math.abs(hash) % 360;
-    return `hsl(${hue}, 85%, 55%)`;
-  };
-
-  async function loadModel() {
-    statusEl.textContent = 'Loading model…';
-    model = await cocoSsd.load();
-    statusEl.textContent = 'Model ready';
+  // Helpers for storage
+  function saveDescriptorsToLocalStorage() {
+    const serial = labeledDescriptors.map(ld => ({
+      label: ld.label,
+      descriptors: ld.descriptors.map(d => Array.from(d))
+    }));
+    localStorage.setItem('faceDB', JSON.stringify(serial));
+  }
+  function loadDescriptorsFromLocalStorage() {
+    const raw = localStorage.getItem('faceDB');
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed.map(p => new faceapi.LabeledFaceDescriptors(p.label, p.descriptors.map(arr=>new Float32Array(arr))));
+    } catch(e) { console.warn('Failed to load faceDB', e); return []; }
   }
 
+  // Camera
   async function startCamera() {
-    startBtn.disabled = true;
-    statusEl.textContent = 'Requesting camera access…';
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode, width: { ideal: 1280 }, height: { ideal: 960 } },
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: {ideal: 1280}, height: {ideal: 720} },
         audio: false
       });
       video.srcObject = stream;
       await video.play();
-
-      overlay.width = video.videoWidth;
-      overlay.height = video.videoHeight;
-
-      if (!model) await loadModel();
-
-      switchBtn.disabled = false;
-      stopBtn.disabled = false;
-      statusEl.textContent = 'Detecting…';
-      detectLoop();
+      streaming = true;
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+      statusEl.textContent = 'Camera started';
     } catch (err) {
+      statusEl.textContent = 'Camera error: ' + err.message;
       console.error(err);
-      statusEl.textContent = 'Camera access failed: ' + err.message;
-      startBtn.disabled = false;
     }
   }
-
   function stopCamera() {
-    if (rafId) cancelAnimationFrame(rafId);
-    if (stream) stream.getTracks().forEach(t => t.stop());
-    ctx.clearRect(0, 0, overlay.width, overlay.height);
-    statusEl.textContent = 'Stopped';
-    startBtn.disabled = false;
-    switchBtn.disabled = true;
-    stopBtn.disabled = true;
-    listEl.innerHTML = '<span id="empty-msg">Nothing detected yet.</span>';
-  }
-
-  async function switchCamera() {
-    facingMode = facingMode === 'environment' ? 'user' : 'environment';
-    if (stream) stream.getTracks().forEach(t => t.stop());
-    await startCamera();
-  }
-
-  function updateDetectionList(predictions) {
-    if (!predictions.length) {
-      listEl.innerHTML = '<span id="empty-msg">Nothing detected yet.</span>';
-      return;
+    if (video.srcObject) {
+      video.srcObject.getTracks().forEach(t => t.stop());
+      video.srcObject = null;
     }
-    const counts = {};
-    predictions.forEach(p => {
-      const name = p.class;
-      counts[name] = (counts[name] || 0) + 1;
-    });
-    listEl.innerHTML = Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) =>
-        `<span class="tag">${name}${count > 1 ? `<span class="count">×${count}</span>` : ''}</span>`
-      ).join('');
+    streaming = false;
+    statusEl.textContent = 'Camera stopped';
+    clearCanvas();
+  }
+  function resizeCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    overlay.width = Math.round(video.videoWidth * dpr);
+    overlay.height = Math.round(video.videoHeight * dpr);
+    overlay.style.width = video.videoWidth + 'px';
+    overlay.style.height = video.videoHeight + 'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  function clearCanvas() {
+    ctx.clearRect(0,0,overlay.width,overlay.height);
   }
 
-  async function detectLoop() {
-    if (!model || video.paused || video.ended) return;
+  // Load models
+  async function loadModels() {
+    statusEl.textContent = 'Loading face models...';
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+      faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL).catch(()=>{}), // optional
+    ]);
+    statusEl.textContent = 'Loading object model...';
+    cocoModel = await cocoSsd.load();
+    statusEl.textContent = 'Models loaded';
+    labeledDescriptors = loadDescriptorsFromLocalStorage();
+    rebuildMatcher();
+  }
 
-    const predictions = await model.detect(video);
-    ctx.clearRect(0, 0, overlay.width, overlay.height);
+  function rebuildMatcher() {
+    if (labeledDescriptors.length) {
+      faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
+      statusEl.textContent = 'Ready — ' + labeledDescriptors.length + ' registered face(s)';
+    } else {
+      faceMatcher = null;
+      statusEl.textContent = 'Ready — no registered faces';
+    }
+  }
 
-    predictions.forEach(pred => {
-      const [x, y, w, h] = pred.bbox;
-      const color = colorFor(pred.class);
-      const label = `${pred.class} ${Math.round(pred.score * 100)}%`;
+  // Registration flow: capture a few samples and store descriptors
+  async function registerFace(name, fromUploadImage=null) {
+    if (!name) { alert('Enter a name first'); return; }
+    statusEl.textContent = `Registering "${name}" — please look at the camera`;
+    const descriptors = [];
+    try {
+      for (let i=0;i<NUM_REGISTRATION_SAMPLES;i++){
+        await new Promise(r => setTimeout(r, 600)); // small pause between samples
+        let detection;
+        if (fromUploadImage) {
+          // detect on provided image element
+          detection = await faceapi.detectSingleFace(fromUploadImage, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+        } else {
+          detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+        }
+        if (detection && detection.descriptor) {
+          descriptors.push(detection.descriptor);
+          statusEl.textContent = `Captured ${descriptors.length}/${NUM_REGISTRATION_SAMPLES}`;
+        } else {
+          statusEl.textContent = `Face not found — try a clearer look (${i+1}/${NUM_REGISTRATION_SAMPLES})`;
+        }
+      }
+      if (descriptors.length) {
+        labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(name, descriptors));
+        saveDescriptorsToLocalStorage();
+        rebuildMatcher();
+        statusEl.textContent = `Registered "${name}" (${descriptors.length} samples)`;
+      } else {
+        statusEl.textContent = 'No descriptors captured — registration failed';
+      }
+    } catch(err) {
+      console.error(err);
+      statusEl.textContent = 'Registration error';
+    }
+  }
 
+  // Recognition + draw loop
+  async function loop() {
+    if (!streaming) return;
+    const now = performance.now();
+    const dt = now - lastLoopTime;
+    lastLoopTime = now;
+    const instFps = 1000 / dt;
+    fpsSmooth = fpsSmooth * 0.85 + instFps * 0.15;
+    fpsEl.textContent = 'FPS: ' + fpsSmooth.toFixed(1);
+
+    clearCanvas();
+    // draw video frame as background
+    ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+
+    // Face detection + recognition
+    const minConfidence = parseFloat(minConf.value);
+    confValue.textContent = Number(minConf.value).toFixed(2);
+    const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: minConfidence });
+    const results = await faceapi.detectAllFaces(video, options).withFaceLandmarks().withFaceDescriptors();
+
+    // draw faces
+    results.forEach(res => {
+      const box = res.detection.box;
+      const score = res.detection.score;
+      // neon box
       ctx.lineWidth = 3;
-      ctx.strokeStyle = color;
-      ctx.strokeRect(x, y, w, h);
+      ctx.strokeStyle = 'rgba(0,230,216,0.95)';
+      roundRect(ctx, box.x-5, box.y-5, box.width+10, box.height+10, 8);
+      ctx.stroke();
 
-      ctx.font = '16px -apple-system, sans-serif';
-      const textWidth = ctx.measureText(label).width;
-      ctx.fillStyle = color;
-      ctx.fillRect(x - 1.5, y - 24, textWidth + 12, 24);
+      // landmarks
+      ctx.fillStyle = 'rgba(0,230,216,0.9)';
+      res.landmarks.positions.slice(36, 68).forEach(pt => {
+        ctx.fillRect(pt.x-1.5, pt.y-1.5, 3, 3);
+      });
 
-      ctx.fillStyle = '#0f1115';
-      ctx.fillText(label, x + 5, y - 6);
+      // recognition
+      let label = 'Unknown';
+      let dist = null;
+      if (faceMatcher) {
+        const best = faceMatcher.findBestMatch(res.descriptor);
+        label = best.toString(); // "name (distance)"
+        // we can parse the distance if needed
+        const m = label.match(/(.+?)\s*\(([\d.]+)\)$/);
+        if (m) { label = m[1]; dist = parseFloat(m[2]); }
+      }
+
+      // label background
+      const labelText = label + (dist != null ? ' • ' + dist.toFixed(2) : '');
+      ctx.font = '18px Inter, sans-serif';
+      const textWidth = ctx.measureText(labelText).width;
+      const px = box.x;
+      const py = Math.max(4, box.y - 26);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(px-4, py-22, textWidth + 14, 26);
+      ctx.fillStyle = '#00e6d8';
+      ctx.fillText(labelText, px + 3, py - 4 + 20);
     });
 
-    updateDetectionList(predictions);
-    rafId = requestAnimationFrame(detectLoop);
+    // Object detection (every N frames or async)
+    try {
+      const objs = await cocoModel.detect(video);
+      const visibleObjs = objs.filter(o => o.score >= minConfidence);
+      objsEl.textContent = 'Objects: ' + visibleObjs.length;
+      visibleObjs.forEach(o => {
+        const [x,y,w,h] = o.bbox;
+        // draw object box
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(255,180,50,0.9)';
+        ctx.strokeRect(x, y, w, h);
+        // draw label bg
+        const label = `${o.class} ${(o.score*100).toFixed(0)}%`;
+        ctx.fillStyle = 'rgba(255,180,50,0.95)';
+        ctx.fillRect(x, y - 20, ctx.measureText(label).width + 10, 20);
+        ctx.fillStyle = '#182022';
+        ctx.fillText(label, x + 5, y - 4);
+      });
+    } catch (e) {
+      // ignore occasional coco errors
+    }
+
+    requestAnimationFrame(loop);
   }
 
-  startBtn.addEventListener('click', startCamera);
-  stopBtn.addEventListener('click', stopCamera);
-  switchBtn.addEventListener('click', switchCamera);
+  // Rounded rect helper
+  function roundRect(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
 
-  // Preload the model in the background so the first "Start" click is faster
-  loadModel().catch(err => {
-    statusEl.textContent = 'Model failed to load: ' + err.message;
+  // Event wiring
+  startBtn.addEventListener('click', async () => {
+    if (!streaming) {
+      await startCamera();
+      if (!faceapi.nets.tinyFaceDetector.params) {
+        await loadModels();
+      }
+      loop();
+    }
   });
-</script>
+  stopBtn.addEventListener('click', () => stopCamera());
 
+  registerBtn.addEventListener('click', async () => {
+    const name = nameInput.value.trim();
+    if (!name) { alert('Please enter a name'); return; }
+    // capture from live camera if running, otherwise ask to upload
+    if (streaming) {
+      await registerFace(name, null);
+    } else {
+      alert('Start the camera first or use Upload Photo to register from an image.');
+    }
+  });
+
+  uploadBtn.addEventListener('click', () => photoUpload.click());
+  photoUpload.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.src = url;
+    img.onload = async () => {
+      // show temp canvas detection and register
+      const name = nameInput.value.trim() || prompt('Name for this photo?');
+      if (!name) return;
+      await registerFace(name, img);
+      URL.revokeObjectURL(url);
+    };
+  });
+
+  clearDB.addEventListener('click', () => {
+    if (!confirm('Clear all registered faces from localStorage?')) return;
+    localStorage.removeItem('faceDB');
+    labeledDescriptors = [];
+    rebuildMatcher();
+    statusEl.textContent = 'Face DB cleared';
+  });
+
+  // init minConf UI
+  minConf.addEventListener('input', () => confValue.textContent = Number(minConf.value).toFixed(2));
+
+  // Load serialized DB on start
+  (function init() {
+    labeledDescriptors = loadDescriptorsFromLocalStorage();
+    rebuildMatcher();
+    statusEl.textContent = 'Idle — load models to begin';
+  })();
+
+  // Note: If you put the models in a different location, change MODEL_URL above.
+  </script>
 </body>
 </html>
